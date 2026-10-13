@@ -1,83 +1,115 @@
 # Elestrals segmentation workflow
 
-Makes the no-foil mask of an Elestrals full-art card picture: text, border, bottom bar and
-character stay flat, the rest of the art is foil.
+Creates a no-foil mask for full-art Elestrals card images. The output is an 8-bit
+PNG: **white = no foil; black = foil**. The overlay tints foil magenta.
 
-Output is an 8-bit grey PNG the size of the card: **white = no foil, black = foil**.
-`examples/Aeolus_mask.png` is the result for Aeolus (BS1-097).
+## Install and run
 
-Status: made and checked on **one card** (Aeolus, 1468 x 2048), on overlays only. Not yet run on
-a second card and not yet seen in game.
+```sh
+pip install -r requirements.txt
+python elestrals_mask.py build card.png
+python launcher.py
+```
 
-## Install
+`launcher.py` adds an optional Tkinter desktop interface with image/output-folder
+pickers, the four workflows, a live log, and a busy indicator. Processing runs in
+a separate worker process. A Python installation with Tkinter is required for
+this source launcher; the Windows executable is not committed to this repository.
+Keep the processing script, `frames/`, and `corrections/` alongside the launcher.
 
-    pip install -r requirements.txt
+```sh
+python elestrals_mask.py build card.png --out out
+python elestrals_mask.py frame card.png --out out
+python elestrals_mask.py sweep card.png --out out
+python elestrals_mask.py fixed card.png
+python -m unittest discover -s tests -v
+```
 
-The matte model (`birefnet-general`, about 970 MB) is downloaded to `~/.u2net` on first use. It
-runs on the CPU and takes about 10 GB of RAM.
+- `build`: final mask and overlay; uses the original `birefnet-general` recipe
+  unless the artwork matches an explicit saved subject correction.
+- `frame`: text/frame preview and the text-painted-out image, without a model.
+- `sweep`: diagnostic comparisons of the selected models and variants.
+- `fixed`: compatibility export of this card's detected layout to
+  `frames/ElestralsFullArt.png`. Normal runs detect their own layout and no longer
+  depend on that shared output file.
 
-## Use
+The model is downloaded to `~/.u2net` on first use (approximately 970 MB), runs on
+the CPU, and originally required approximately 10 GB RAM. Sweep can download
+additional models. No new runtime dependencies were added for detection.
 
-    python3 elestrals_mask.py build <card.png>     the mask: out/<card>.png and out/<card>_overlay.jpg
-    python3 elestrals_mask.py frame <card.png>     text, border and bar only; no model, fast
-    python3 elestrals_mask.py sweep <card.png>     every regrade x every model, one contact sheet per model
-    python3 elestrals_mask.py fixed <card.png>     rebuild frames/ElestralsFullArt.png from the bar trace
+## Processing and the stat-bar boundary
 
-`--out DIR` changes the output folder. On the overlay the foil area is tinted magenta.
+1. Detect neutral printed body text by its white fill and dark rim. A separate
+   title detector handles the colored, outlined card names in the full-art title
+   band, preserving the spaces between letters.
+2. Match the bottom frame using OpenCV and reference surfaces. Separate templates
+   cover classic and circular-stat frames with one, two, or three rune stones.
+   Variable numbers and elemental symbols are excluded from matching weights.
+3. Refine the frame perimeter locally with GrabCut. Lower-edge growth is limited
+   so dark artwork beneath the inset stripe does not become part of the metal.
+4. Paint out text for the character model. **The model receives only the crop
+   above the highest detected stat-bar pixel.** Its matte is padded with zero
+   below that row. This applies to Build and Sweep, including models other than
+   BirefNet. Saved subject selections and subsequent hole filling cannot override
+   the lower layout either.
+5. From that row down, only the frame, printed footer, and physical card perimeter
+   determine the mask. The footer is traced upward from the bottom black band,
+   with enclosed credits filled and isolated dark artwork excluded. Exposed art
+   between the frame and footer remains foil.
 
-Card pictures are not in this repo; bring your own.
+The physical perimeter is bounded spatially: a dark patch connected to the card
+edge is not automatically treated as border throughout the artwork.
 
-## How it works
+## Additional output files
 
-Matte models fail on a whole card: the rules text reads as foreground. So the card is taken apart
-first.
+Each normal workflow also writes:
 
-1. **Text and black border by colour rules, no model.** Text is any white patch with a black rim.
-   The outline and its dark glow count as text; what shows through a letter (the middle of an
-   "o" in the title) is art and stays foil. The border is black that reaches the picture's edge.
-2. **The text is painted out** (inpaint), so the model sees a card without its text.
-3. **`birefnet-general` mattes the character** on that picture.
-4. **The bottom of the card is a fixed mask.** It is the same on every card and never has a
-   character on it, so `frames/ElestralsFullArt.png` is the last word there: bar, gem, inset line
-   and the black band with the credits are no foil, the slivers of art around the bar are foil.
-
-Two clean-ups on the character matte: pieces that stay within 16 px of the fixed mask are dropped
-(the model takes the bar for foreground and spills a few px over its edge onto the art), and
-pinholes inside the character are filled.
-
-## The fixed mask
-
-`frames/ElestralsFullArt.png` has three values:
-
-| Value | Meaning |
+| File | Content |
 |---|---|
-| 255 white | no foil |
-| 0 black | foil |
-| 128 grey | not fixed, decided per card (everything above the bar) |
+| `<card>_stat_frame.png` | Original frame pixels on transparency; hidden RGB cleared |
+| `<card>_stat_frame_mask.png` | White frame, black elsewhere |
+| `<card>_footer_mask.png` | Detected printed footer protection |
+| `<card>_frame_detection.json` | Style, rune count, similarity, offset, artwork cutoff and contour correction |
+| `<card>_subject_mask.png` | Saved subject selection, when a corrected Build is used |
 
-It is built by `fixed` from `frames/ElestralsBarTrace.png`, a hand trace of the bar and its gem
-(white on black), plus the black of the card it is run on. To change the bar's outline, edit the
-trace and run `fixed` again. Soft brush edges are snapped to the nearest of the three values.
+## Explicit artwork corrections
 
-## What was tried
+`corrections/subjects.json` includes saved selections for Trifernal (middle dog,
+shoulders and front legs; rear dogs treated as background), Emphyrix (tail and
+pale wing sections), and Stratomoth (body, antennae and wing boundaries).
+`corrections/frames.json` contains Ohmperial's tighter frame contour and measured
+exterior side profiles. Corrections require a match to a small RGB artwork
+reference; filenames alone do not activate them.
 
-14 regrades of the card x 7 rembg models (`sweep`), judged on overlay sheets:
+These are user-directed artwork selections, **not a model trained to recognize
+foil stars or E symbols**. Subject corrections apply to Build; Sweep remains a
+comparison of model results. Text protection on corrected artwork is constrained
+to its title/rules bands to avoid treating glints and speed lines as letters.
 
-- **`birefnet-general` on the text-free card** has the whole figure, including the legs behind the
-  rules text.
-- **Gamma, contrast, saturation, CLAHE** move its matte by 1 to 2%. None is used.
-- **A median blur** makes every model worse.
-- **Blanking the frame** before the model does not help.
-- **`birefnet-general-lite` and `birefnet-massive`** lose the legs under the text.
-- **`isnet-anime`** loses half the white cape; **`birefnet-portrait`** finds nothing.
-- **Colour rules for the bar** could not part its grey bevel and gem from grey clouds behind them,
-  and SAM on click points came out speckled. Hence the hand trace.
+## Validation and limits
 
-## Limits
+Frame style/rune-count selection was checked on 15 available Base Full Art
+images, including mixed-element three-rune stat frames. Resized images, small
+translations, blank-image rejection, and representative frame interiors were
+checked during development. Several contours and subjects were refined after
+visual review; that does not establish pixel-perfect accuracy on unseen cards.
+The original `examples/Aeolus_mask.png` predates these changes.
 
-- The colour thresholds and pixel distances are tuned to a 1468 x 2048 picture of this layout.
-- Whether the frame sits on the same pixels on other cards is not checked. If it does not, the
-  fixed mask needs an offset or scale.
-- Other layouts (a different bar, no bar) need their own fixed mask.
-- One card per run; there is no batch mode.
-- Props count as character (the sack on Aeolus).
+Classic two/three-rune references are composed from the original classic stone.
+They passed composed-image checks, but real cards of those two layouts were not
+available. Other layouts can fail the similarity threshold or require new
+references. Similarity scores are not calibrated probabilities.
+
+Frame matching normalizes to 1468 x 2048 and searches a small neighborhood for
+translation. The original body-text thresholds, morphology distances and subject
+cleanup remain tuned to that size. Corrections rescale with the image but are not
+intended for different artwork crops or card layouts. Inspect frame/subject
+exports and overlays before using a newly encountered card in game.
+
+The model input crop intentionally changes the model's context compared with the
+original whole-card run. Segmentation above the stat bar may therefore differ.
+
+The checked-in reference crops/thumbnails come from the inspected original card
+images; masks are traced/refined detection assets. No generated illustration is
+used as a frame-matching reference. The original hand-traced frame assets remain
+available in `frames/`.

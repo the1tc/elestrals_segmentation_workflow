@@ -1,0 +1,23 @@
+[
+  {
+    "name": "Trifernal center dog",
+    "reference": "trifernal-reference.png",
+    "mask": "trifernal-center-subject.png",
+    "max_mean_absolute_error": 8,
+    "reason": "User selected the central dog as no-foil; both side dogs are foil background."
+  },
+  {
+    "name": "Emphyrix complete tail and wings",
+    "reference": "emphyrix-reference.png",
+    "mask": "emphyrix-complete-subject.png",
+    "max_mean_absolute_error": 8,
+    "reason": "User correction: include pale wing panels and visible gold tail strands missed by the matte model."
+  },
+  {
+    "name": "Stratomoth wings and body",
+    "reference": "stratomoth-reference.png",
+    "mask": "stratomoth-subject.png",
+    "max_mean_absolute_error": 8,
+    "reason": "User correction: remove background masses and retain full wing and antenna outlines."
+  }
+]

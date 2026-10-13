@@ -1,0 +1,81 @@
+[
+  {
+    "name": "Ohmperial metal perimeter",
+    "reference": "ohmperial-frame-reference.png",
+    "mask": "ohmperial-frame-contour.png",
+    "max_mean_absolute_error": 8,
+    "left_edge_profile": [
+      [
+        1770,
+        64
+      ],
+      [
+        1790,
+        71
+      ],
+      [
+        1870,
+        71
+      ],
+      [
+        1915,
+        69
+      ],
+      [
+        1930,
+        75
+      ],
+      [
+        1940,
+        81
+      ],
+      [
+        1950,
+        92
+      ],
+      [
+        1958,
+        103
+      ],
+      [
+        1962,
+        113
+      ]
+    ],
+    "right_edge_profile": [
+      [
+        1770,
+        1410
+      ],
+      [
+        1790,
+        1396
+      ],
+      [
+        1918,
+        1396
+      ],
+      [
+        1925,
+        1393
+      ],
+      [
+        1935,
+        1384
+      ],
+      [
+        1945,
+        1376
+      ],
+      [
+        1955,
+        1365
+      ],
+      [
+        1962,
+        1357
+      ]
+    ],
+    "side_bottom": 1962
+  }
+]
